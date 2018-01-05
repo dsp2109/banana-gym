@@ -1,5 +1,6 @@
 This repository contains a PIP package which is an OpenAI environment for
-simulating an enironment in which bananas get sold.
+simulating an enironment in which bananas get sold. Its structure was forked from https://github.com/MartinThoma/banana-gym in case you see any "bananas" flying around in the code.
+See here for the banana gym author for explanation in the second answer: https://stackoverflow.com/questions/45068568/is-it-possible-to-create-a-new-gym-environment-in-openai
 
 
 ## Installation
@@ -16,22 +17,20 @@ pip install -e .
 
 ```
 import gym
-import gym_banana
+import gym_poker_history
 
-env = gym.make('Banana-v0')
+env = gym.make('PokerHistory-v0')
 ```
 
-See https://github.com/matthiasplappert/keras-rl/tree/master/examples for some
+See https://github.com/openai/baselines/blob/master/baselines/deepq/ for some
 examples.
 
 
 ## The Environment
 
-Imagine you are selling bananas. One at a time. And the bananas get bad pretty
-quickly. Let's say in 3 days. The probability that I will sell the banana
-is given by
+The "environment" is inheriting from the environment class so as to work well with open source code, like openai/baselines github. It feeds poker hands from last year's ACPC and supplies game state, action, rewards, and whether the hand is done. 
 
-$$p(x) = (1+e)/(1. + e^(x+1))$$
+It can NOT take any action from the action state and return the resulting state/reward, because it is not a true environment, just a workaround to feed in hand logs and not disrupt the code in certain reinforcement learning solutions.
 
-where x-1 is my profit. This x-1 is my reward. If I don't sell the
-banana, the agent gets a reward of -1 (the price of the banana).
+Hand logs can be found on this website: www.computerpokercompetition.org/
+
