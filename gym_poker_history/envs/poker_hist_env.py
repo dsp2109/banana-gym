@@ -37,23 +37,27 @@ class PokerHistEnv(gym.Env):
         print("PokerHistEnv - Version {}".format(self.__version__))
 
         # General variables defining the environment
-        self.MAX_PRICE = 2.0
+        self.INITIAL_STACKS = 20000
         self.TOTAL_TIME_STEPS = 2
 
         self.curr_step = -1
         self.is_banana_sold = False
 
         #DP EDITS
+        self.curr_step = -1
         self.curr_hand = -1
         self.is_hand_over = False
         self.is_hand_won = False #replacememnt for self.is_banana_sold = False
+        #hands are episodes
+        self.action_episode_memory = []
 
         # Define what the agent can do
         # Sell at 0.00 EUR, 0.10 Euro, ..., 2.00 Euro
         self.action_space = spaces.Discrete(13)
         #DP, do we need this many actions? Need to figure out how to represent actions.
-        #{"fold":0, "check": 1, "call":2, "bet 0.2":3, "bet 0.3": 4, "bet 0.4": 5, "bet 0.5": 6, "raise 0.6": 7,"raise 0.75":8, "raise 1":9, "raise 1.5":10, "raise 2":11,"raise 5":12, "raise all":12}
-        #maybe reduce this for initial tests [0.2, 0.35. 0.5, 0.7, 1, 1.5, 4, all-in]
+        #{"fold":0, "check": 1, "call":2, "bet 0.22":3, "bet 0.35": 4, "bet 0.5": 5, "bet 0.7": 6, "raise 1": 7,"raise 1.5":8, "raise 4":9, "raise all":10, "ante":11}
+        #maybe reduce this for initial tests [0.22, 0.35. 0.5, 0.7, 1, 1.5, 4, all-in]
+        #perhaps look at the distribution of the hands
 
         # Observation is the remaining time
         low = np.array([0.0,  # remaining_tries
@@ -62,11 +66,8 @@ class PokerHistEnv(gym.Env):
                          ])
         self.observation_space = spaces.Box(low, high)
         #DP, https://github.com/openai/gym/blob/master/gym/spaces/box.py
-        #DP, will need to figure out low and high
+        #DP, observation will be much larger
 
-        # Store what the agent tried
-        self.curr_episode = -1
-        self.action_episode_memory = []
 
     def _step(self, action):
         """
@@ -109,28 +110,31 @@ class PokerHistEnv(gym.Env):
     def _take_action(self, action):
         #DP check does action meet what we planned?
         self.action_episode_memory[self.curr_episode].append(action)
+        
+
         self.price = ((float(self.MAX_PRICE) /
                       (self.action_space.n - 1)) * action)
 
         chance_to_take = get_chance(self.price)
         banana_is_sold = (random.random() < chance_to_take)
+        #DP
+
 
         if banana_is_sold:
             self.is_banana_sold = True
 
-        remaining_steps = self.TOTAL_TIME_STEPS - self.curr_step
-        time_is_over = (remaining_steps <= 0)
-        throw_away = time_is_over and not self.is_banana_sold
+        #log whether hand is over
         if throw_away:
             self.is_banana_sold = True  # abuse this a bit
             self.price = 0.0
 
     def _get_reward(self):
         """Reward is given for a sold banana."""
-        if self.is_banana_sold:
-            return self.price - 1
+        if self.is_hand_over & is_hand_won:
+            #DP, pot won or lost
+            return self.pot - self.cost
         else:
-            return 0.0
+            return -self.cost
 
         #DP edit
         if self.is_hand_over:
@@ -146,8 +150,9 @@ class PokerHistEnv(gym.Env):
         """
         self.curr_episode += 1
         self.action_episode_memory.append([]) #DP - huh? append empty list?
-        self.is_banana_sold = False
-        self.price = 1.00
+        self.is_hand_won = False
+        self.is_hand_over = False
+        self.pot = 150
         return self._get_state()
 
     def _render(self, mode='human', close=False):
