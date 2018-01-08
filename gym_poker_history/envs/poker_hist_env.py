@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 
 """
-Simulate the simplifie Banana selling environment.
+Simulate the simplified poker hand history environment.
 
-Each episode is selling a single banana.
+Each episode is selling a hand from one player's perspective.
 """
 
 # core modules
@@ -14,15 +14,8 @@ import math
 # 3rd party modules
 import gym
 import numpy as np
+import pandas as pd
 from gym import spaces
-
-
-def get_chance(x):
-    """Get probability that a banana will be sold at price x."""
-    raise RuntimeError("still accessing banana things in get_chance") #DP NOT NEEDED
-    e = math.exp(1)
-    return (1.0 + e) / (1. + math.exp(x + 1))
-
 
 class PokerHistEnv(gym.Env):
     """
@@ -37,36 +30,30 @@ class PokerHistEnv(gym.Env):
         print("PokerHistEnv - Version {}".format(self.__version__))
 
         # General variables defining the environment
-        self.INITIAL_STACKS = 20000
-        self.TOTAL_TIME_STEPS = 2
-
-        self.curr_step = -1
-        self.is_banana_sold = False
+        self.SHAPE = (13, 13, 16)
 
         #DP EDITS
         self.curr_step = -1
-        self.curr_hand = -1
+        self.curr_episode = -1
+        self.curr_action = -1
         self.is_hand_over = False
-        self.is_hand_won = False #replacememnt for self.is_banana_sold = False
-        #hands are episodes
-        self.action_episode_memory = []
+        self.is_hand_won = False 
 
-        # Define what the agent can do
-        # Sell at 0.00 EUR, 0.10 Euro, ..., 2.00 Euro
-        self.action_space = spaces.Discrete(13)
-        #DP, do we need this many actions? Need to figure out how to represent actions.
-        #{"fold":0, "check": 1, "call":2, "bet 0.22":3, "bet 0.35": 4, "bet 0.5": 5, "bet 0.7": 6, "raise 1": 7,"raise 1.5":8, "raise 4":9, "raise all":10, "ante":11}
-        #maybe reduce this for initial tests [0.22, 0.35. 0.5, 0.7, 1, 1.5, 4, all-in]
-        #perhaps look at the distribution of the hands
+        self.action_space = spaces.Discrete(11)
+        # action_choices = {"fold":0, "check_call_0": 1, "bet 0.1":2, "bet 0.25": 3,
+        # "bet 0.4": 4, "bet 0.55": 5, "bet 0.7": 6,"bet 1":7, "bet 1.5":8,"bet 2.5":9,
+        # "bet all":10}
 
-        # Observation is the remaining time
-        low = np.array([0.0,  # remaining_tries
-                        ])
-        high = np.array([self.TOTAL_TIME_STEPS,  # remaining_tries
-                         ])
+        # Observation is the game state and prior actions
+        
+        low = np.zeros(self.SHAPE)
+        high = np.ones(self.SHAPE)
         self.observation_space = spaces.Box(low, high)
         #DP, https://github.com/openai/gym/blob/master/gym/spaces/box.py
-        #DP, observation will be much larger
+        
+        self.hh_df = pd.read_pickle(\
+            "C:/Users/dsp21/NYDS/Project/Capstone Ideas/Poker bot/git_things/test_episodes1000.pickle")
+        #columns = ["obs", "acts", "reward", "done", "num_steps"]
 
 
     def _step(self, action):
@@ -101,43 +88,31 @@ class PokerHistEnv(gym.Env):
         """
         if self.is_hand_over:
             raise RuntimeError("Episode is done")
-        self.curr_step += 1
-        self._take_action(action)
+
         reward = self._get_reward()
-        ob = self._get_state()
+        self._take_action(action) 
+        self.curr_step += 1
+        ob = self._get_state() #observation is next one
+
         return ob, reward, self.is_hand_over, {}
 
+    def _get_action(self):
+        self.curr_action = self.hh_df.loc[self.curr_episode,"acts"][0][self.curr_step]
+        return self.curr_action
+
     def _take_action(self, action):
-        #DP check does action meet what we planned?
-        self.action_episode_memory[self.curr_episode].append(action)
-        
+        self._get_action()
+        if self.curr_action != action:
+            import pdb; pdb.set_trace()
+            raise RuntimeError("action taken is not same as saved hand_log action")
+            #Does action meet what we planned?
 
-        self.price = ((float(self.MAX_PRICE) /
-                      (self.action_space.n - 1)) * action)
+        self.is_hand_over = self.hh_df.loc[self.curr_episode,"done"][0][self.curr_step]
 
-        chance_to_take = get_chance(self.price)
-        banana_is_sold = (random.random() < chance_to_take)
-        #DP
-
-
-        if banana_is_sold:
-            self.is_banana_sold = True
-
-        #log whether hand is over
-        if throw_away:
-            self.is_banana_sold = True  # abuse this a bit
-            self.price = 0.0
 
     def _get_reward(self):
         """Reward is given for a sold banana."""
-        if self.is_hand_over & is_hand_won:
-            #DP, pot won or lost
-            return self.pot - self.cost
-        else:
-            return -self.cost
-
-        #DP edit
-        if self.is_hand_over:
+        return self.hh_df.loc[self.curr_episode,"reward"][0][self.curr_step]
 
 
     def _reset(self):
@@ -149,17 +124,17 @@ class PokerHistEnv(gym.Env):
         observation (object): the initial observation of the space.
         """
         self.curr_episode += 1
-        self.action_episode_memory.append([]) #DP - huh? append empty list?
-        self.is_hand_won = False
+        self.curr_step = 0
+        self._get_action()
         self.is_hand_over = False
-        self.pot = 150
+
         return self._get_state()
+
+    def _get_state(self):
+        """Get the observation."""
+        ob = self.hh_df.loc[self.curr_episode,"obs"][0][self.curr_step] #+1 for next observation
+        return ob
 
     def _render(self, mode='human', close=False):
         print("tried to render - no rendering function built") #DP edit
         return
-
-    def _get_state(self):
-        """Get the observation."""
-        ob = [self.TOTAL_TIME_STEPS - self.curr_step]
-        return ob
